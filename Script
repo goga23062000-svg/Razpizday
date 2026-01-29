@@ -1,26 +1,18 @@
--- Free Camera Script for Roblox
+-- Position Saver & Teleporter for Roblox
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
-local camera = workspace.CurrentCamera
 
--- Configuration
-local cameraSpeed = 10
-local fastCameraSpeed = 25
-local mouseSensitivity = 0.5
-
--- Camera state
-local freeCameraEnabled = false
-local cameraPosition = Vector3.new(0, 0, 0)
-local cameraRotation = Vector2.new(0, 0)
-local originalCameraType = Enum.CameraType.Custom
+-- Saved position
+local savedPosition = nil
 
 -- UI Elements
 local screenGui
-local toggleButton
+local saveButton
+local teleportButton
+local positionLabel
 
 -- Create the user interface
 function createUI()
@@ -29,104 +21,205 @@ function createUI()
     end
     
     screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "FreeCameraUI"
+    screenGui.Name = "PositionTeleportUI"
     screenGui.Parent = player.PlayerGui
     screenGui.ResetOnSpawn = false
     
-    toggleButton = Instance.new("TextButton")
-    toggleButton.Name = "ToggleButton"
-    toggleButton.Size = UDim2.new(0, 150, 0, 40)
-    toggleButton.Position = UDim2.new(0, 20, 0, 20)
-    toggleButton.BackgroundColor3 = Color3.fromRGB(70, 130, 180)
-    toggleButton.BorderSizePixel = 0
-    toggleButton.Text = "FREE CAMERA"
-    toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    toggleButton.TextSize = 16
-    toggleButton.Font = Enum.Font.GothamBold
-    toggleButton.ZIndex = 10
-    toggleButton.Parent = screenGui
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 200, 0, 140)
+    mainFrame.Position = UDim2.new(0, 20, 0, 80)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    mainFrame.BackgroundTransparency = 0.1
+    mainFrame.Parent = screenGui
     
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = toggleButton
+    corner.Parent = mainFrame
     
-    local shadow = Instance.new("UIStroke")
-    shadow.Color = Color3.fromRGB(40, 40, 60)
-    shadow.Thickness = 2
-    shadow.Parent = toggleButton
+    local title = Instance.new("TextLabel")
+    title.Name = "Title"
+    title.Size = UDim2.new(1, 0, 0, 30)
+    title.BackgroundTransparency = 1
+    title.Text = "POSITION TELEPORT"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.TextSize = 16
+    title.Font = Enum.Font.GothamBold
+    title.Parent = mainFrame
     
-    toggleButton.MouseButton1Click:Connect(function()
-        toggleFreeCamera()
+    positionLabel = Instance.new("TextLabel")
+    positionLabel.Name = "PositionLabel"
+    positionLabel.Size = UDim2.new(1, -20, 0, 35)
+    positionLabel.Position = UDim2.new(0, 10, 0, 35)
+    positionLabel.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    positionLabel.Text = "No position saved"
+    positionLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    positionLabel.TextSize = 12
+    positionLabel.Font = Enum.Font.Gotham
+    positionLabel.Parent = mainFrame
+    
+    local labelCorner = Instance.new("UICorner")
+    labelCorner.CornerRadius = UDim.new(0, 6)
+    labelCorner.Parent = positionLabel
+    
+    saveButton = Instance.new("TextButton")
+    saveButton.Name = "SaveButton"
+    saveButton.Size = UDim2.new(1, -20, 0, 35)
+    saveButton.Position = UDim2.new(0, 10, 0, 80)
+    saveButton.BackgroundColor3 = Color3.fromRGB(70, 130, 180)
+    saveButton.Text = "SAVE POSITION"
+    saveButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    saveButton.TextSize = 14
+    saveButton.Font = Enum.Font.GothamBold
+    saveButton.Parent = mainFrame
+    
+    local saveCorner = Instance.new("UICorner")
+    saveCorner.CornerRadius = UDim.new(0, 6)
+    saveCorner.Parent = saveButton
+    
+    teleportButton = Instance.new("TextButton")
+    teleportButton.Name = "TeleportButton"
+    teleportButton.Size = UDim2.new(1, -20, 0, 35)
+    teleportButton.Position = UDim2.new(0, 10, 0, 120)
+    teleportButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    teleportButton.Text = "TELEPORT"
+    teleportButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    teleportButton.TextSize = 14
+    teleportButton.Font = Enum.Font.GothamBold
+    teleportButton.Parent = mainFrame
+    
+    local teleportCorner = Instance.new("UICorner")
+    teleportCorner.CornerRadius = UDim.new(0, 6)
+    teleportCorner.Parent = teleportButton
+    
+    saveButton.MouseButton1Click:Connect(function()
+        saveCurrentPosition()
     end)
     
-    toggleButton.MouseEnter:Connect(function()
-        if not freeCameraEnabled then
-            TweenService:Create(toggleButton, TweenInfo.new(0.2), {
-                BackgroundColor3 = Color3.fromRGB(100, 160, 210)
-            }):Play()
-        end
+    teleportButton.MouseButton1Click:Connect(function()
+        teleportToSavedPosition()
     end)
     
-    toggleButton.MouseLeave:Connect(function()
-        if not freeCameraEnabled then
-            TweenService:Create(toggleButton, TweenInfo.new(0.2), {
+    saveButton.MouseEnter:Connect(function()
+        TweenService:Create(saveButton, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(100, 160, 210)
+        }):Play()
+    end)
+    
+    saveButton.MouseLeave:Connect(function()
+        if not (saveButton.BackgroundColor3 == Color3.fromRGB(50, 180, 100)) then
+            TweenService:Create(saveButton, TweenInfo.new(0.2), {
                 BackgroundColor3 = Color3.fromRGB(70, 130, 180)
             }):Play()
         end
     end)
+    
+    teleportButton.MouseEnter:Connect(function()
+        if savedPosition then
+            TweenService:Create(teleportButton, TweenInfo.new(0.2), {
+                BackgroundColor3 = Color3.fromRGB(120, 200, 120)
+            }):Play()
+        end
+    end)
+    
+    teleportButton.MouseLeave:Connect(function()
+        if savedPosition then
+            TweenService:Create(teleportButton, TweenInfo.new(0.2), {
+                BackgroundColor3 = Color3.fromRGB(100, 180, 100)
+            }):Play()
+        end
+    end)
+    
+    updateTeleportButton()
 end
 
--- Toggle free camera on/off
-function toggleFreeCamera()
-    freeCameraEnabled = not freeCameraEnabled
+-- Save the current player position
+function saveCurrentPosition()
+    local character = player.Character
+    if not character then
+        showNotification("No character found!", Color3.fromRGB(255, 100, 100))
+        return
+    end
     
-    if freeCameraEnabled then
-        originalCameraType = camera.CameraType
-        
-        cameraPosition = camera.CFrame.Position
-        cameraRotation = Vector2.new(
-            math.atan2(camera.CFrame.LookVector.Z, camera.CFrame.LookVector.X),
-            math.asin(camera.CFrame.LookVector.Y)
-        )
-        
-        camera.CameraType = Enum.CameraType.Scriptable
-        
-        toggleButton.BackgroundColor3 = Color3.fromRGB(50, 180, 100)
-        toggleButton.Text = "FREE CAMERA [ON]"
-        
-        UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
-        UserInputService.MouseIconEnabled = false
-        
-        showNotification("Free Camera Enabled", Color3.fromRGB(100, 255, 100))
-        
-        print("Free Camera: Enabled")
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then
+        showNotification("HumanoidRootPart not found!", Color3.fromRGB(255, 100, 100))
+        return
+    end
+    
+    savedPosition = humanoidRootPart.Position
+    
+    positionLabel.Text = string.format("X: %.1f, Y: %.1f, Z: %.1f", 
+        savedPosition.X, savedPosition.Y, savedPosition.Z)
+    
+    saveButton.BackgroundColor3 = Color3.fromRGB(50, 180, 100)
+    
+    TweenService:Create(saveButton, TweenInfo.new(0.5), {
+        BackgroundColor3 = Color3.fromRGB(70, 130, 180)
+    }):Play()
+    
+    showNotification("Position saved successfully!", Color3.fromRGB(100, 255, 100))
+    
+    updateTeleportButton()
+    
+    print("Position saved at:", savedPosition)
+end
+
+-- Teleport to the saved position
+function teleportToSavedPosition()
+    if not savedPosition then
+        showNotification("No position saved!", Color3.fromRGB(255, 100, 100))
+        return
+    end
+    
+    local character = player.Character
+    if not character then
+        showNotification("No character found!", Color3.fromRGB(255, 100, 100))
+        return
+    end
+    
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then
+        showNotification("HumanoidRootPart not found!", Color3.fromRGB(255, 100, 100))
+        return
+    end
+    
+    humanoidRootPart.CFrame = CFrame.new(savedPosition)
+    
+    teleportButton.BackgroundColor3 = Color3.fromRGB(120, 200, 120)
+    
+    TweenService:Create(teleportButton, TweenInfo.new(0.5), {
+        BackgroundColor3 = Color3.fromRGB(100, 180, 100)
+    }):Play()
+    
+    showNotification("Teleported to saved position!", Color3.fromRGB(100, 200, 255))
+    
+    print("Teleported to:", savedPosition)
+end
+
+-- Update the teleport button state
+function updateTeleportButton()
+    if savedPosition then
+        teleportButton.BackgroundColor3 = Color3.fromRGB(100, 180, 100)
+        teleportButton.Text = "TELEPORT"
     else
-        camera.CameraType = originalCameraType
-        
-        toggleButton.BackgroundColor3 = Color3.fromRGB(70, 130, 180)
-        toggleButton.Text = "FREE CAMERA"
-        
-        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-        UserInputService.MouseIconEnabled = true
-        
-        showNotification("Free Camera Disabled", Color3.fromRGB(255, 100, 100))
-        
-        print("Free Camera: Disabled")
+        teleportButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        teleportButton.Text = "NO POSITION"
     end
 end
 
--- Show notification message
+-- Show a notification message
 function showNotification(message, color)
     local notification = Instance.new("TextLabel")
     notification.Name = "Notification"
-    notification.Size = UDim2.new(0, 300, 0, 40)
-    notification.Position = UDim2.new(0.5, -150, 0, 20)
+    notification.Size = UDim2.new(0, 280, 0, 40)
+    notification.Position = UDim2.new(0.5, -140, 0.8, 0)
     notification.AnchorPoint = Vector2.new(0.5, 0)
     notification.BackgroundColor3 = color
     notification.BackgroundTransparency = 0.2
     notification.Text = message
     notification.TextColor3 = Color3.fromRGB(255, 255, 255)
-    notification.TextSize = 16
+    notification.TextSize = 14
     notification.Font = Enum.Font.GothamBold
     notification.ZIndex = 20
     notification.Parent = screenGui
@@ -143,79 +236,26 @@ function showNotification(message, color)
     game:GetService("Debris"):AddItem(notification, 2)
 end
 
--- Update camera position and rotation
-function updateCamera(deltaTime)
-    if not freeCameraEnabled then return end
-    
-    local inputVector = Vector3.new(0, 0, 0)
-    local speed = cameraSpeed
-    
-    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-        inputVector = inputVector + Vector3.new(0, 0, -1)
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-        inputVector = inputVector + Vector3.new(0, 0, 1)
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-        inputVector = inputVector + Vector3.new(-1, 0, 0)
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-        inputVector = inputVector + Vector3.new(1, 0, 0)
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.E) then
-        inputVector = inputVector + Vector3.new(0, 1, 0)
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.Q) then
-        inputVector = inputVector + Vector3.new(0, -1, 0)
-    end
-    
-    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-        speed = fastCameraSpeed
-    end
-    
-    local mouseDelta = UserInputService:GetMouseDelta()
-    cameraRotation = Vector2.new(
-        cameraRotation.X - mouseDelta.X * mouseSensitivity * 0.01,
-        math.clamp(cameraRotation.Y - mouseDelta.Y * mouseSensitivity * 0.01, -math.pi/2 + 0.1, math.pi/2 - 0.1)
-    )
-    
-    if inputVector.Magnitude > 0 then
-        inputVector = inputVector.Unit
-    end
-    
-    local movement = inputVector * speed * deltaTime
-    local camCFrame = CFrame.fromEulerAnglesYXZ(cameraRotation.Y, cameraRotation.X, 0)
-    movement = camCFrame:VectorToWorldSpace(movement)
-    
-    cameraPosition = cameraPosition + movement
-    
-    camera.CFrame = CFrame.new(cameraPosition) * camCFrame
-end
-
 -- Handle keyboard shortcuts
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     
-    if input.KeyCode == Enum.KeyCode.F5 then
-        toggleFreeCamera()
+    if input.KeyCode == Enum.KeyCode.F7 then
+        saveCurrentPosition()
+    elseif input.KeyCode == Enum.KeyCode.F8 then
+        teleportToSavedPosition()
     end
-end)
-
--- Update camera every frame
-RunService.RenderStepped:Connect(function(deltaTime)
-    updateCamera(deltaTime)
 end)
 
 -- Initialize the script
 if player then
     createUI()
-    print("Free Camera script loaded successfully.")
-    print("Press F5 or click the button to toggle free camera.")
-    print("Controls: WASD - Move, Q/E - Up/Down, Shift - Speed boost, Mouse - Look around")
+    print("Position Teleport script loaded successfully.")
+    print("Press F7 to save current position.")
+    print("Press F8 to teleport to saved position.")
 else
     Players.PlayerAdded:Wait()
     player = Players.LocalPlayer
-    camera = workspace.CurrentCamera
     createUI()
 end
 
