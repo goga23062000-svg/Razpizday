@@ -59,10 +59,10 @@ title.Name = "Title"
 title.Size = UDim2.new(1, -20, 1, 0)
 title.Position = UDim2.new(0, 10, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "ТЕЛЕПОРТ СИСТЕМА"
+title.Text = "⚡ БЫСТРАЯ ТЕЛЕПОРТАЦИЯ"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.GothamBold
-title.TextSize = 24
+title.TextSize = 22
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = titleFrame
 
@@ -71,7 +71,7 @@ subtitle.Name = "Subtitle"
 subtitle.Size = UDim2.new(1, -20, 0, 20)
 subtitle.Position = UDim2.new(0, 10, 0, 35)
 subtitle.BackgroundTransparency = 1
-subtitle.Text = "Сохраняй позиции и телепортируйся"
+subtitle.Text = "Мгновенная телепортация к сохраненным точкам"
 subtitle.TextColor3 = Color3.fromRGB(200, 200, 220)
 subtitle.Font = Enum.Font.Gotham
 subtitle.TextSize = 14
@@ -100,10 +100,10 @@ saveButton.Name = "SaveButton"
 saveButton.Size = UDim2.new(1, -20, 0, 50)
 saveButton.Position = UDim2.new(0, 10, 1, -60)
 saveButton.BackgroundColor3 = Color3.fromRGB(60, 150, 250)
-saveButton.Text = "💾 СОХРАНИТЬ ПОЗИЦИЮ"
+saveButton.Text = "💾 СОХРАНИТЬ ТЕКУЩУЮ ПОЗИЦИЮ"
 saveButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 saveButton.Font = Enum.Font.GothamBold
-saveButton.TextSize = 18
+saveButton.TextSize = 16
 saveButton.AutoButtonColor = false
 saveButton.Parent = mainFrame
 
@@ -145,6 +145,43 @@ screenGui.Parent = playerGui
 local savedPositions = {}
 local menuOpen = false
 local isAnimating = false
+
+-- Функция для мгновенной телепортации
+local function instantTeleport(position)
+	local character = player.Character
+	if not character then return end
+	
+	local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+	if not humanoidRootPart then return end
+	
+	-- Мгновенная телепортация
+	humanoidRootPart.CFrame = CFrame.new(position)
+	
+	-- Если есть Humanoid, останавливаем движение
+	local humanoid = character:FindFirstChild("Humanoid")
+	if humanoid then
+		humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+		task.wait(0.1)
+		humanoid:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
+	end
+	
+	-- Визуальный эффект (вспышка)
+	local teleportEffect = Instance.new("Part")
+	teleportEffect.Size = Vector3.new(5, 0.1, 5)
+	teleportEffect.CFrame = humanoidRootPart.CFrame * CFrame.new(0, -3, 0)
+	teleportEffect.Anchored = true
+	teleportEffect.CanCollide = false
+	teleportEffect.Transparency = 0.5
+	teleportEffect.Color = Color3.fromRGB(100, 200, 255)
+	teleportEffect.Material = EnumMaterial.Neon
+	teleportEffect.Parent = workspace
+	
+	-- Исчезающий эффект
+	game:GetService("Debris"):AddItem(teleportEffect, 0.5)
+	TweenService:Create(teleportEffect, TweenInfo.new(0.5), {Transparency = 1, Size = Vector3.new(10, 0.1, 10)}):Play()
+	
+	return true
+end
 
 -- Функция для создания карточки позиции
 local function createPositionCard(positionName, position)
@@ -207,7 +244,7 @@ local function createPositionCard(positionName, position)
 	teleportButton.Position = UDim2.new(1, -115, 0.5, -20)
 	teleportButton.AnchorPoint = Vector2.new(1, 0.5)
 	teleportButton.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
-	teleportButton.Text = "ТЕЛЕПОРТ"
+	teleportButton.Text = "⚡ ТЕЛЕПОРТ"
 	teleportButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 	teleportButton.Font = Enum.Font.GothamBold
 	teleportButton.TextSize = 14
@@ -245,20 +282,36 @@ local function createPositionCard(positionName, position)
 	teleportButton.Parent = card
 	deleteButton.Parent = card
 	
-	-- Функционал кнопок
+	-- Функционал кнопки телепортации
 	teleportButton.MouseButton1Click:Connect(function()
-		local character = player.Character
-		if character and character:FindFirstChild("HumanoidRootPart") then
-			-- Эффект телепортации
-			local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-			local tween = TweenService:Create(character.HumanoidRootPart, tweenInfo, {CFrame = CFrame.new(position)})
-			tween:Play()
+		-- Визуальная обратная связь
+		local originalText = teleportButton.Text
+		teleportButton.Text = "⚡"
+		teleportButton.BackgroundColor3 = Color3.fromRGB(100, 220, 140)
+		
+		-- Мгновенная телепортация
+		local success = instantTeleport(position)
+		
+		if success then
+			-- Звуковой эффект (опционально)
+			-- local sound = Instance.new("Sound")
+			-- sound.SoundId = "rbxassetid://ваш_звук"
+			-- sound.Parent = player.Character.HumanoidRootPart
+			-- sound:Play()
 			
-			-- Визуальная обратная связь
-			teleportButton.Text = "⚡"
-			task.wait(0.5)
-			teleportButton.Text = "ТЕЛЕПОРТ"
+			-- Мигающий эффект кнопки
+			for i = 1, 2 do
+				TweenService:Create(teleportButton, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(150, 250, 180)}):Play()
+				task.wait(0.1)
+				TweenService:Create(teleportButton, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(100, 220, 140)}):Play()
+				task.wait(0.1)
+			end
 		end
+		
+		-- Возвращаем исходный вид
+		task.wait(0.3)
+		teleportButton.Text = originalText
+		teleportButton.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
 	end)
 	
 	deleteButton.MouseButton1Click:Connect(function()
@@ -307,7 +360,7 @@ local function saveCurrentPosition()
 	end
 	
 	local position = character.HumanoidRootPart.Position
-	local positionName = "Позиция #" .. (#savedPositions + 1)
+	local positionName = "Точка #" .. (#savedPositions + 1)
 	
 	-- Добавляем в массив
 	table.insert(savedPositions, {
@@ -320,9 +373,21 @@ local function saveCurrentPosition()
 	card.Parent = savedPositionsFrame
 	
 	-- Визуальная обратная связь
+	local originalText = saveButton.Text
 	saveButton.Text = "✓ СОХРАНЕНО!"
+	saveButton.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
+	
+	-- Мигающий эффект
+	for i = 1, 2 do
+		TweenService:Create(saveButton, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(120, 220, 150)}):Play()
+		task.wait(0.1)
+		TweenService:Create(saveButton, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(80, 200, 120)}):Play()
+		task.wait(0.1)
+	end
+	
 	task.wait(0.5)
-	saveButton.Text = "💾 СОХРАНИТЬ ПОЗИЦИЮ"
+	saveButton.Text = originalText
+	saveButton.BackgroundColor3 = Color3.fromRGB(60, 150, 250)
 end
 
 -- Функция переключения меню
@@ -380,9 +445,14 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if input.KeyCode == Enum.KeyCode.Tab then
 		toggleMenu()
 	end
+	
+	-- Дополнительная горячая клавиша для быстрого сохранения (F5)
+	if input.KeyCode == Enum.KeyCode.F5 then
+		saveCurrentPosition()
+	end
 end)
 
--- Автосохранение позиции при запуске (опционально)
+-- Автосохранение позиции при запуске
 task.spawn(function()
 	task.wait(2) -- Ждем загрузки
 	local character = player.Character
@@ -398,4 +468,45 @@ task.spawn(function()
 	end
 end)
 
-print("Teleport System загружен! Нажмите Tab или кнопку ≡ чтобы открыть меню.")
+-- Функция для быстрой телепортации последней точки (горячая клавиша F6)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	
+	if input.KeyCode == Enum.KeyCode.F6 then
+		if #savedPositions > 0 then
+			local lastPosition = savedPositions[#savedPositions].position
+			instantTeleport(lastPosition)
+			
+			-- Визуальный эффект на экране
+			local notification = Instance.new("TextLabel")
+			notification.Text = "⚡ Телепортация к последней точке!"
+			notification.Size = UDim2.new(0, 300, 0, 40)
+			notification.Position = UDim2.new(0.5, -150, 0.1, 0)
+			notification.AnchorPoint = Vector2.new(0.5, 0)
+			notification.BackgroundColor3 = Color3.fromRGB(60, 150, 250)
+			notification.TextColor3 = Color3.fromRGB(255, 255, 255)
+			notification.Font = Enum.Font.GothamBold
+			notification.TextSize = 16
+			notification.BackgroundTransparency = 0.3
+			
+			local notificationCorner = Instance.new("UICorner")
+			notificationCorner.CornerRadius = UDim.new(0, 10)
+			notificationCorner.Parent = notification
+			
+			notification.Parent = screenGui
+			
+			-- Анимация появления и исчезновения
+			TweenService:Create(notification, TweenInfo.new(0.3), {BackgroundTransparency = 0.3}):Play()
+			task.wait(2)
+			TweenService:Create(notification, TweenInfo.new(0.3), {BackgroundTransparency = 1}):Play()
+			task.wait(0.3)
+			notification:Destroy()
+		end
+	end
+end)
+
+print("⚡ Быстрая телепортация загружена!")
+print("Управление:")
+print("Tab - Открыть/закрыть меню")
+print("F5 - Быстро сохранить позицию")
+print("F6 - Телепорт к последней сохраненной точке")
