@@ -1,0 +1,346 @@
+-- Free Camera Script for Roblox
+-- Author: sherik
+
+-- Services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+-- Local player
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- Configuration
+local cameraSpeed = 10
+local fastCameraSpeed = 25
+local mouseSensitivity = 0.5
+
+-- Camera state
+local freeCameraEnabled = false
+local cameraPosition = Vector3.new(0, 0, 0)
+local cameraRotation = Vector2.new(0, 0)
+local originalCameraType = Enum.CameraType.Custom
+
+-- UI Elements
+local screenGui
+local toggleButton
+local teleportButton
+
+-- Create UI
+function createUI()
+    -- Destroy existing UI
+    if screenGui then
+        screenGui:Destroy()
+    end
+    
+    -- Create ScreenGui
+    screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "FreeCameraUI"
+    screenGui.Parent = player.PlayerGui
+    screenGui.ResetOnSpawn = false
+    
+    -- Create toggle button
+    toggleButton = Instance.new("TextButton")
+    toggleButton.Name = "ToggleButton"
+    toggleButton.Size = UDim2.new(0, 150, 0, 40)
+    toggleButton.Position = UDim2.new(0, 20, 0, 20)
+    toggleButton.BackgroundColor3 = Color3.fromRGB(70, 130, 180)
+    toggleButton.BorderSizePixel = 0
+    toggleButton.Text = "FREE CAMERA"
+    toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    toggleButton.TextSize = 16
+    toggleButton.Font = Enum.Font.GothamBold
+    toggleButton.Parent = screenGui
+    
+    -- Add rounded corners
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = toggleButton
+    
+    -- Add shadow
+    local shadow = Instance.new("UIStroke")
+    shadow.Color = Color3.fromRGB(40, 40, 60)
+    shadow.Thickness = 2
+    shadow.Parent = toggleButton
+    
+    -- Create teleport button
+    teleportButton = Instance.new("TextButton")
+    teleportButton.Name = "TeleportButton"
+    teleportButton.Size = UDim2.new(0, 150, 0, 40)
+    teleportButton.Position = UDim2.new(0, 20, 0, 70)
+    teleportButton.BackgroundColor3 = Color3.fromRGB(100, 180, 100)
+    teleportButton.BorderSizePixel = 0
+    teleportButton.Text = "TELEPORT TO CAMERA"
+    teleportButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    teleportButton.TextSize = 14
+    teleportButton.Font = Enum.Font.GothamBold
+    teleportButton.Visible = false
+    teleportButton.Parent = screenGui
+    
+    -- Add rounded corners to teleport button
+    local corner2 = Instance.new("UICorner")
+    corner2.CornerRadius = UDim.new(0, 8)
+    corner2.Parent = teleportButton
+    
+    -- Add shadow to teleport button
+    local shadow2 = Instance.new("UIStroke")
+    shadow2.Color = Color3.fromRGB(40, 60, 40)
+    shadow2.Thickness = 2
+    shadow2.Parent = teleportButton
+    
+    -- Button hover effects
+    toggleButton.MouseEnter:Connect(function()
+        if not freeCameraEnabled then
+            game:GetService("TweenService"):Create(toggleButton, TweenInfo.new(0.2), {
+                BackgroundColor3 = Color3.fromRGB(100, 160, 210)
+            }):Play()
+        end
+    end)
+    
+    toggleButton.MouseLeave:Connect(function()
+        if not freeCameraEnabled then
+            game:GetService("TweenService"):Create(toggleButton, TweenInfo.new(0.2), {
+                BackgroundColor3 = Color3.fromRGB(70, 130, 180)
+            }):Play()
+        end
+    end)
+    
+    teleportButton.MouseEnter:Connect(function()
+        game:GetService("TweenService"):Create(teleportButton, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(120, 200, 120)
+        }):Play()
+    end)
+    
+    teleportButton.MouseLeave:Connect(function()
+        game:GetService("TweenService"):Create(teleportButton, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(100, 180, 100)
+        }):Play()
+    end)
+    
+    -- Button click events
+    toggleButton.MouseButton1Click:Connect(function()
+        toggleFreeCamera()
+    end)
+    
+    teleportButton.MouseButton1Click:Connect(function()
+        teleportToCamera()
+    end)
+end
+
+-- Toggle free camera
+function toggleFreeCamera()
+    freeCameraEnabled = not freeCameraEnabled
+    
+    if freeCameraEnabled then
+        -- Save original camera type
+        originalCameraType = camera.CameraType
+        
+        -- Get current camera position
+        cameraPosition = camera.CFrame.Position
+        cameraRotation = Vector2.new(
+            math.atan2(camera.CFrame.LookVector.Z, camera.CFrame.LookVector.X),
+            math.asin(camera.CFrame.LookVector.Y)
+        )
+        
+        -- Change camera type
+        camera.CameraType = Enum.CameraType.Scriptable
+        
+        -- Show teleport button
+        teleportButton.Visible = true
+        
+        -- Update toggle button
+        toggleButton.BackgroundColor3 = Color3.fromRGB(50, 180, 100)
+        toggleButton.Text = "FREE CAMERA [ON]"
+        
+        -- Show notification
+        showNotification("Free Camera Enabled!", Color3.fromRGB(100, 255, 100))
+        
+        -- Enable mouse lock for better control
+        UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+        
+    else
+        -- Restore original camera
+        camera.CameraType = originalCameraType
+        
+        -- Hide teleport button
+        teleportButton.Visible = false
+        
+        -- Update toggle button
+        toggleButton.BackgroundColor3 = Color3.fromRGB(70, 130, 180)
+        toggleButton.Text = "FREE CAMERA"
+        
+        -- Release mouse
+        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        
+        -- Show notification
+        showNotification("Free Camera Disabled!", Color3.fromRGB(255, 100, 100))
+    end
+end
+
+-- Teleport player to camera position
+function teleportToCamera()
+    if not freeCameraEnabled then
+        showNotification("Enable Free Camera first!", Color3.fromRGB(255, 200, 50))
+        return
+    end
+    
+    local character = player.Character
+    if character then
+        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+        if humanoidRootPart then
+            -- Teleport the player
+            humanoidRootPart.CFrame = CFrame.new(cameraPosition)
+            
+            -- Show notification
+            showNotification("Teleported to camera position!", Color3.fromRGB(100, 200, 255))
+        end
+    end
+end
+
+-- Show notification
+function showNotification(message, color)
+    local notification = Instance.new("TextLabel")
+    notification.Name = "Notification"
+    notification.Size = UDim2.new(0, 300, 0, 40)
+    notification.Position = UDim2.new(0.5, -150, 0, 20)
+    notification.AnchorPoint = Vector2.new(0.5, 0)
+    notification.BackgroundColor3 = color
+    notification.BackgroundTransparency = 0.2
+    notification.Text = message
+    notification.TextColor3 = Color3.fromRGB(255, 255, 255)
+    notification.TextSize = 16
+    notification.Font = Enum.Font.GothamBold
+    notification.Parent = screenGui
+    
+    -- Add rounded corners
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = notification
+    
+    -- Fade out animation
+    game:GetService("TweenService"):Create(notification, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
+        BackgroundTransparency = 1,
+        TextTransparency = 1
+    }):Play()
+    
+    -- Destroy after animation
+    game:GetService("Debris"):AddItem(notification, 2)
+end
+
+-- Camera movement system
+local function updateCamera(deltaTime)
+    if not freeCameraEnabled then return end
+    
+    -- Get input
+    local inputVector = Vector3.new(0, 0, 0)
+    
+    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+        inputVector = inputVector + Vector3.new(0, 0, -1)
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+        inputVector = inputVector + Vector3.new(0, 0, 1)
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+        inputVector = inputVector + Vector3.new(-1, 0, 0)
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+        inputVector = inputVector + Vector3.new(1, 0, 0)
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.E) then
+        inputVector = inputVector + Vector3.new(0, 1, 0)
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.Q) then
+        inputVector = inputVector + Vector3.new(0, -1, 0)
+    end
+    
+    -- Normalize input
+    if inputVector.Magnitude > 0 then
+        inputVector = inputVector.Unit
+    end
+    
+    -- Apply speed
+    local speed = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) and fastCameraSpeed or cameraSpeed
+    local movement = inputVector * speed * deltaTime
+    
+    -- Get current camera orientation
+    local camCFrame = CFrame.fromEulerAnglesYXZ(cameraRotation.Y, cameraRotation.X, 0)
+    
+    -- Transform movement to camera space
+    movement = camCFrame:VectorToWorldSpace(movement)
+    
+    -- Update camera position
+    cameraPosition = cameraPosition + movement
+    
+    -- Get mouse delta for rotation
+    local mouseDelta = UserInputService:GetMouseDelta()
+    
+    -- Update camera rotation
+    cameraRotation = Vector2.new(
+        cameraRotation.X - mouseDelta.X * mouseSensitivity * 0.01,
+        math.clamp(cameraRotation.Y - mouseDelta.Y * mouseSensitivity * 0.01, -math.pi/2 + 0.1, math.pi/2 - 0.1)
+    )
+    
+    -- Create new camera CFrame
+    local newCFrame = CFrame.new(cameraPosition) * 
+        CFrame.fromEulerAnglesYXZ(cameraRotation.Y, cameraRotation.X, 0)
+    
+    -- Apply to camera
+    camera.CFrame = newCFrame
+end
+
+-- Input handling for toggling with key
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    -- Toggle with F5 key
+    if input.KeyCode == Enum.KeyCode.F5 then
+        toggleFreeCamera()
+    end
+    
+    -- Teleport with F6 key
+    if input.KeyCode == Enum.KeyCode.F6 and freeCameraEnabled then
+        teleportToCamera()
+    end
+end)
+
+-- Connect to RunService for camera updates
+RunService.RenderStepped:Connect(function(deltaTime)
+    updateCamera(deltaTime)
+end)
+
+-- Instructions function
+function showInstructions()
+    local instructions = [[
+Free Camera Controls:
+• Click FREE CAMERA button or press F5 to toggle
+• WASD - Move camera
+• Q/E - Move up/down
+• Shift - Speed boost
+• Mouse - Look around
+• Click TELEPORT button or press F6 to teleport
+• Press F5 again to exit
+    ]]
+    
+    print(instructions)
+    showNotification("Free Camera Loaded! Press F5 or click button", Color3.fromRGB(100, 200, 255))
+end
+
+-- Initialize when player joins
+if player then
+    createUI()
+    showInstructions()
+else
+    -- Wait for player if script runs before player loads
+    Players.PlayerAdded:Wait()
+    player = Players.LocalPlayer
+    createUI()
+    showInstructions()
+end
+
+-- Recreate UI if player respawns
+player.CharacterAdded:Connect(function()
+    createUI()
+end)
+
+print("Free Camera Script by sherik loaded successfully!")
