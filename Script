@@ -1,17 +1,327 @@
+-- Часть 1: Anti-Tsunami Cheat для Escape the Tsunami
+-- Защищает от смертельной волны и дает бессмертие
+
 -- Services
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
--- Создаем основную GUI
+-- Игрок
+local player = Players.LocalPlayer
+
+-- Переменные
+local isImmortal = false
+local originalHealth = 100
+local isScriptActive = true
+
+-- Функция для поиска волны-убийцы
+local function findKillerWave()
+    for _, part in ipairs(Workspace:GetDescendants()) do
+        -- Ищем части с подозрительными именами (волна, цунами, убийца и т.д.)
+        if part:IsA("BasePart") then
+            local nameLower = part.Name:lower()
+            if nameLower:find("wave") or 
+               nameLower:find("tsunami") or 
+               nameLower:find("water") or
+               nameLower:find("kill") or
+               nameLower:find("death") or
+               nameLower:find("damage") then
+                
+                -- Проверяем, есть ли у части скрипты или touch интерест
+                for _, child in ipairs(part:GetDescendants()) do
+                    if child:IsA("Script") or child:IsA("LocalScript") then
+                        return part, child
+                    end
+                end
+                
+                -- Проверяем Touch интерест
+                if part:FindFirstChildWhichIsA("TouchInterest") then
+                    return part, part:FindFirstChildWhichIsA("TouchInterest")
+                end
+            end
+        end
+    end
+    return nil, nil
+end
+
+-- Функция защиты от волны
+local function protectFromWave()
+    while isScriptActive do
+        local character = player.Character
+        if character then
+            local humanoid = character:FindFirstChild("Humanoid")
+            
+            if humanoid then
+                -- Сохраняем оригинальное здоровье
+                if humanoid.Health > 0 then
+                    originalHealth = humanoid.Health
+                end
+                
+                -- Активируем бессмертие
+                if isImmortal then
+                    -- Восстанавливаем здоровье, если оно упало
+                    if humanoid.Health <= 10 then
+                        humanoid.Health = originalHealth
+                    end
+                    
+                    -- Защита от смерти
+                    humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+                    
+                    -- Отключаем урон
+                    for _, connection in ipairs(getconnections(humanoid.Died)) do
+                        connection:Disable()
+                    end
+                end
+            end
+            
+            -- Ищем и нейтрализуем волну-убийцу
+            local wavePart, waveScript = findKillerWave()
+            if wavePart then
+                -- Метод 1: Делаем волну безвредной
+                wavePart.CanTouch = false
+                wavePart.CanCollide = false
+                
+                -- Метод 2: Отключаем скрипты
+                if waveScript then
+                    waveScript.Disabled = true
+                end
+                
+                -- Метод 3: Удаляем Touch интерест
+                local touchInterest = wavePart:FindFirstChildWhichIsA("TouchInterest")
+                if touchInterest then
+                    touchInterest:Destroy()
+                end
+                
+                -- Метод 4: Делаем невидимой (опционально)
+                wavePart.Transparency = 1
+                wavePart.LocalTransparencyModifier = 1
+            end
+        end
+        
+        task.wait(0.1) -- Проверяем каждые 0.1 секунды
+    end
+end
+
+-- Функция для включения/выключения бессмертия
+local function toggleImmortality()
+    isImmortal = not isImmortal
+    
+    local character = player.Character
+    if character then
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            if isImmortal then
+                -- Включаем бессмертие
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+                humanoid.Health = 100
+                print("🛡️ Бессмертие ВКЛЮЧЕНО")
+            else
+                -- Выключаем бессмертие
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, true)
+                print("🛡️ Бессмертие ВЫКЛЮЧЕНО")
+            end
+        end
+    end
+end
+
+-- Функция для полного отключения волны
+local function disableWaveCompletely()
+    local wavePart, waveScript = findKillerWave()
+    if wavePart then
+        -- Полностью удаляем волну
+        wavePart:Destroy()
+        print("🌊 Волна полностью удалена!")
+        return true
+    end
+    return false
+end
+
+-- Создаем простой GUI для управления
+local function createAntiWaveGUI()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "AntiTsunamiGUI"
+    screenGui.Parent = player:WaitForChild("PlayerGui")
+    
+    -- Основная кнопка
+    local mainButton = Instance.new("TextButton")
+    mainButton.Name = "MainButton"
+    mainButton.Size = UDim2.new(0, 50, 0, 50)
+    mainButton.Position = UDim2.new(1, -60, 0.5, -25)
+    mainButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    mainButton.Text = "🛡️"
+    mainButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    mainButton.Font = Enum.Font.GothamBold
+    mainButton.TextSize = 24
+    mainButton.AutoButtonColor = false
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 10)
+    corner.Parent = mainButton
+    
+    mainButton.Parent = screenGui
+    
+    -- Меню управления
+    local menuFrame = Instance.new("Frame")
+    menuFrame.Name = "MenuFrame"
+    menuFrame.Size = UDim2.new(0, 200, 0, 150)
+    menuFrame.Position = UDim2.new(1, -210, 0.5, -75)
+    menuFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    menuFrame.BackgroundTransparency = 0.1
+    menuFrame.Visible = false
+    
+    local menuCorner = Instance.new("UICorner")
+    menuCorner.CornerRadius = UDim.new(0, 10)
+    menuCorner.Parent = menuFrame
+    
+    menuFrame.Parent = screenGui
+    
+    -- Кнопки меню
+    local buttons = {
+        {
+            text = "Бессмертие: ВЫКЛ",
+            name = "ImmortalityToggle",
+            color = Color3.fromRGB(100, 100, 255)
+        },
+        {
+            text = "Удалить волну",
+            name = "DeleteWave",
+            color = Color3.fromRGB(255, 100, 100)
+        },
+        {
+            text = "Восстановить HP",
+            name = "Heal",
+            color = Color3.fromRGB(100, 255, 100)
+        }
+    }
+    
+    local buttonHeight = 40
+    for i, btnInfo in ipairs(buttons) do
+        local button = Instance.new("TextButton")
+        button.Name = btnInfo.name
+        button.Size = UDim2.new(1, -20, 0, buttonHeight)
+        button.Position = UDim2.new(0, 10, 0, 10 + (i-1)*(buttonHeight + 10))
+        button.BackgroundColor3 = btnInfo.color
+        button.Text = btnInfo.text
+        button.TextColor3 = Color3.fromRGB(255, 255, 255)
+        button.Font = Enum.Font.Gotham
+        button.TextSize = 14
+        button.AutoButtonColor = false
+        
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 8)
+        btnCorner.Parent = button
+        
+        button.Parent = menuFrame
+    end
+    
+    -- Обработчики кнопок
+    mainButton.MouseButton1Click:Connect(function()
+        menuFrame.Visible = not menuFrame.Visible
+    end)
+    
+    menuFrame:FindFirstChild("ImmortalityToggle").MouseButton1Click:Connect(function()
+        toggleImmortality()
+        local btn = menuFrame:FindFirstChild("ImmortalityToggle")
+        if isImmortal then
+            btn.Text = "Бессмертие: ВКЛ"
+            btn.BackgroundColor3 = Color3.fromRGB(50, 255, 50)
+        else
+            btn.Text = "Бессмертие: ВЫКЛ"
+            btn.BackgroundColor3 = Color3.fromRGB(100, 100, 255)
+        end
+    end)
+    
+    menuFrame:FindFirstChild("DeleteWave").MouseButton1Click:Connect(function()
+        if disableWaveCompletely() then
+            local btn = menuFrame:FindFirstChild("DeleteWave")
+            btn.Text = "✅ Волна удалена!"
+            task.wait(1)
+            btn.Text = "Удалить волну"
+        end
+    end)
+    
+    menuFrame:FindFirstChild("Heal").MouseButton1Click:Connect(function()
+        local character = player.Character
+        if character then
+            local humanoid = character:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid.Health = 100
+                local btn = menuFrame:FindFirstChild("Heal")
+                btn.Text = "❤️ HP восстановлен!"
+                task.wait(1)
+                btn.Text = "Восстановить HP"
+            end
+        end
+    end)
+    
+    return screenGui
+end
+
+-- Запускаем защиту
+spawn(function()
+    protectFromWave()
+end)
+
+-- Создаем GUI
+createAntiWaveGUI()
+
+-- Горячие клавиши
+local UserInputService = game:GetService("UserInputService")
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.F1 then
+        toggleImmortality()
+        print("🛡️ Бессмертие переключено: " .. (isImmortal and "ВКЛ" or "ВЫКЛ"))
+    end
+    
+    if input.KeyCode == Enum.KeyCode.F2 then
+        disableWaveCompletely()
+    end
+    
+    if input.KeyCode == Enum.KeyCode.F3 then
+        local character = player.Character
+        if character then
+            local humanoid = character:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid.Health = 100
+                print("❤️ HP восстановлен до 100")
+            end
+        end
+    end
+end)
+
+print("=========================================")
+print("🛡️ Anti-Tsunami Cheat загружен!")
+print("========================================")
+print("Управление:")
+print("F1 - Включить/выключить бессмертие")
+print("F2 - Полностью удалить волну")
+print("F3 - Восстановить HP до 100")
+print("Правая кнопка на экране - открыть меню")
+print("=========================================")
+-- Часть 2: Teleport System для Escape the Tsunami
+-- Красивая система телепортации с сохранением позиций
+
+-- Services (повторяем только нужные для этой части)
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+-- Получаем игрока из первой части
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "TeleportSystem"
-screenGui.ResetOnSpawn = false
-screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+-- Удаляем старый GUI если есть
+local oldGui = playerGui:FindFirstChild("TeleportSystem")
+if oldGui then
+    oldGui:Destroy()
+end
+
+-- Создаем новый GUI для телепортации
+local teleportGui = Instance.new("ScreenGui")
+teleportGui.Name = "TeleportSystem"
+teleportGui.ResetOnSpawn = false
+teleportGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 -- Контейнер для меню
 local mainFrame = Instance.new("Frame")
@@ -19,36 +329,34 @@ mainFrame.Name = "MainFrame"
 mainFrame.Size = UDim2.new(0, 350, 1, -40)
 mainFrame.Position = UDim2.new(0, -350, 0.5, 0)
 mainFrame.AnchorPoint = Vector2.new(0, 0.5)
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 40, 80)
 mainFrame.BorderSizePixel = 0
 mainFrame.BackgroundTransparency = 0.1
-mainFrame.Parent = screenGui
 
--- Эффект размытия фона
-local backgroundBlur = Instance.new("BlurEffect")
-backgroundBlur.Name = "MenuBlur"
-backgroundBlur.Size = 0
-backgroundBlur.Parent = game:GetService("Lighting")
-
--- Закругление углов
+-- Стилизация
 local uiCorner = Instance.new("UICorner")
 uiCorner.CornerRadius = UDim.new(0, 15)
 uiCorner.Parent = mainFrame
 
--- Тень
 local uiShadow = Instance.new("UIStroke")
-uiShadow.Color = Color3.fromRGB(0, 0, 0)
-uiShadow.Thickness = 2
-uiShadow.Transparency = 0.7
+uiShadow.Color = Color3.fromRGB(0, 50, 100)
+uiShadow.Thickness = 3
 uiShadow.Parent = mainFrame
+
+-- Градиент
+local gradient = Instance.new("UIGradient")
+gradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(10, 30, 70)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 60, 120))
+})
+gradient.Rotation = 90
+gradient.Parent = mainFrame
 
 -- Заголовок
 local titleFrame = Instance.new("Frame")
-titleFrame.Name = "TitleFrame"
 titleFrame.Size = UDim2.new(1, 0, 0, 60)
-titleFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+titleFrame.BackgroundColor3 = Color3.fromRGB(10, 30, 60)
 titleFrame.BorderSizePixel = 0
-titleFrame.Parent = mainFrame
 
 local titleCorner = Instance.new("UICorner")
 titleCorner.CornerRadius = UDim.new(0, 15)
@@ -59,53 +367,55 @@ title.Name = "Title"
 title.Size = UDim2.new(1, -20, 1, 0)
 title.Position = UDim2.new(0, 10, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "⚡ БЫСТРАЯ ТЕЛЕПОРТАЦИЯ"
+title.Text = "⚡ ТЕЛЕПОРТАЦИЯ"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.GothamBold
-title.TextSize = 22
+title.TextSize = 24
 title.TextXAlignment = Enum.TextXAlignment.Left
-title.Parent = titleFrame
 
 local subtitle = Instance.new("TextLabel")
 subtitle.Name = "Subtitle"
 subtitle.Size = UDim2.new(1, -20, 0, 20)
 subtitle.Position = UDim2.new(0, 10, 0, 35)
 subtitle.BackgroundTransparency = 1
-subtitle.Text = "Мгновенная телепортация к сохраненным точкам"
-subtitle.TextColor3 = Color3.fromRGB(200, 200, 220)
+subtitle.Text = "Быстрая телепортация по карте"
+subtitle.TextColor3 = Color3.fromRGB(180, 220, 255)
 subtitle.Font = Enum.Font.Gotham
 subtitle.TextSize = 14
 subtitle.TextXAlignment = Enum.TextXAlignment.Left
-subtitle.Parent = titleFrame
 
--- Контейнер для сохраненных позиций
+subtitle.Parent = titleFrame
+title.Parent = titleFrame
+titleFrame.Parent = mainFrame
+
+-- Список сохраненных позиций
 local savedPositionsFrame = Instance.new("ScrollingFrame")
 savedPositionsFrame.Name = "SavedPositionsFrame"
 savedPositionsFrame.Size = UDim2.new(1, -20, 1, -140)
 savedPositionsFrame.Position = UDim2.new(0, 10, 0, 70)
 savedPositionsFrame.BackgroundTransparency = 1
 savedPositionsFrame.ScrollBarThickness = 6
-savedPositionsFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 150)
+savedPositionsFrame.ScrollBarImageColor3 = Color3.fromRGB(50, 100, 180)
 savedPositionsFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 savedPositionsFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-savedPositionsFrame.Parent = mainFrame
 
 local positionsLayout = Instance.new("UIListLayout")
 positionsLayout.Padding = UDim.new(0, 10)
 positionsLayout.Parent = savedPositionsFrame
 
--- Кнопка сохранения позиции
+savedPositionsFrame.Parent = mainFrame
+
+-- Кнопка сохранения
 local saveButton = Instance.new("TextButton")
 saveButton.Name = "SaveButton"
 saveButton.Size = UDim2.new(1, -20, 0, 50)
 saveButton.Position = UDim2.new(0, 10, 1, -60)
 saveButton.BackgroundColor3 = Color3.fromRGB(60, 150, 250)
-saveButton.Text = "💾 СОХРАНИТЬ ТЕКУЩУЮ ПОЗИЦИЮ"
+saveButton.Text = "💾 СОХРАНИТЬ ПОЗИЦИЮ"
 saveButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 saveButton.Font = Enum.Font.GothamBold
-saveButton.TextSize = 16
+saveButton.TextSize = 18
 saveButton.AutoButtonColor = false
-saveButton.Parent = mainFrame
 
 local saveButtonCorner = Instance.new("UICorner")
 saveButtonCorner.CornerRadius = UDim.new(0, 10)
@@ -116,6 +426,8 @@ saveButtonStroke.Color = Color3.fromRGB(100, 180, 255)
 saveButtonStroke.Thickness = 2
 saveButtonStroke.Parent = saveButton
 
+saveButton.Parent = mainFrame
+
 -- Кнопка переключения меню
 local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ToggleButton"
@@ -123,12 +435,11 @@ toggleButton.Size = UDim2.new(0, 50, 0, 50)
 toggleButton.Position = UDim2.new(0, 10, 0.5, -25)
 toggleButton.AnchorPoint = Vector2.new(0, 0.5)
 toggleButton.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
-toggleButton.Text = "≡"
+toggleButton.Text = "⚡"
 toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 toggleButton.Font = Enum.Font.GothamBold
 toggleButton.TextSize = 30
 toggleButton.AutoButtonColor = false
-toggleButton.Parent = screenGui
 
 local toggleButtonCorner = Instance.new("UICorner")
 toggleButtonCorner.CornerRadius = UDim.new(0, 10)
@@ -139,374 +450,298 @@ toggleButtonStroke.Color = Color3.fromRGB(100, 100, 150)
 toggleButtonStroke.Thickness = 2
 toggleButtonStroke.Parent = toggleButton
 
-screenGui.Parent = playerGui
+toggleButton.Parent = teleportGui
+mainFrame.Parent = teleportGui
+teleportGui.Parent = playerGui
 
--- Переменные
+-- Переменные для телепортации
 local savedPositions = {}
 local menuOpen = false
 local isAnimating = false
-
--- Функция для мгновенной телепортации
-local function instantTeleport(position)
-	local character = player.Character
-	if not character then return end
-	
-	local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-	if not humanoidRootPart then return end
-	
-	-- Мгновенная телепортация
-	humanoidRootPart.CFrame = CFrame.new(position)
-	
-	-- Если есть Humanoid, останавливаем движение
-	local humanoid = character:FindFirstChild("Humanoid")
-	if humanoid then
-		humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-		task.wait(0.1)
-		humanoid:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
-	end
-	
-	-- Визуальный эффект (вспышка)
-	local teleportEffect = Instance.new("Part")
-	teleportEffect.Size = Vector3.new(5, 0.1, 5)
-	teleportEffect.CFrame = humanoidRootPart.CFrame * CFrame.new(0, -3, 0)
-	teleportEffect.Anchored = true
-	teleportEffect.CanCollide = false
-	teleportEffect.Transparency = 0.5
-	teleportEffect.Color = Color3.fromRGB(100, 200, 255)
-	teleportEffect.Material = EnumMaterial.Neon
-	teleportEffect.Parent = workspace
-	
-	-- Исчезающий эффект
-	game:GetService("Debris"):AddItem(teleportEffect, 0.5)
-	TweenService:Create(teleportEffect, TweenInfo.new(0.5), {Transparency = 1, Size = Vector3.new(10, 0.1, 10)}):Play()
-	
-	return true
-end
+local isTeleporting = false
 
 -- Функция для создания карточки позиции
 local function createPositionCard(positionName, position)
-	local card = Instance.new("Frame")
-	card.Name = "PositionCard"
-	card.Size = UDim2.new(1, 0, 0, 80)
-	card.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
-	card.BackgroundTransparency = 0.1
-	
-	local cardCorner = Instance.new("UICorner")
-	cardCorner.CornerRadius = UDim.new(0, 10)
-	cardCorner.Parent = card
-	
-	local cardStroke = Instance.new("UIStroke")
-	cardStroke.Color = Color3.fromRGB(80, 80, 100)
-	cardStroke.Thickness = 1
-	cardStroke.Parent = card
-	
-	local icon = Instance.new("TextLabel")
-	icon.Name = "Icon"
-	icon.Size = UDim2.new(0, 50, 0, 50)
-	icon.Position = UDim2.new(0, 15, 0.5, -25)
-	icon.AnchorPoint = Vector2.new(0, 0.5)
-	icon.BackgroundColor3 = Color3.fromRGB(60, 150, 250)
-	icon.Text = "📍"
-	icon.TextColor3 = Color3.fromRGB(255, 255, 255)
-	icon.Font = Enum.Font.GothamBold
-	icon.TextSize = 24
-	icon.TextScaled = true
-	
-	local iconCorner = Instance.new("UICorner")
-	iconCorner.CornerRadius = UDim.new(0, 10)
-	iconCorner.Parent = icon
-	
-	local positionNameLabel = Instance.new("TextLabel")
-	positionNameLabel.Name = "PositionName"
-	positionNameLabel.Size = UDim2.new(0.6, -70, 0, 30)
-	positionNameLabel.Position = UDim2.new(0, 75, 0, 15)
-	positionNameLabel.BackgroundTransparency = 1
-	positionNameLabel.Text = positionName
-	positionNameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	positionNameLabel.Font = Enum.Font.GothamBold
-	positionNameLabel.TextSize = 18
-	positionNameLabel.TextXAlignment = Enum.TextXAlignment.Left
-	
-	local coordinatesLabel = Instance.new("TextLabel")
-	coordinatesLabel.Name = "Coordinates"
-	coordinatesLabel.Size = UDim2.new(0.6, -70, 0, 20)
-	coordinatesLabel.Position = UDim2.new(0, 75, 0, 45)
-	coordinatesLabel.BackgroundTransparency = 1
-	coordinatesLabel.Text = string.format("X:%.1f Y:%.1f Z:%.1f", position.X, position.Y, position.Z)
-	coordinatesLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
-	coordinatesLabel.Font = Enum.Font.Gotham
-	coordinatesLabel.TextSize = 14
-	coordinatesLabel.TextXAlignment = Enum.TextXAlignment.Left
-	
-	local teleportButton = Instance.new("TextButton")
-	teleportButton.Name = "TeleportButton"
-	teleportButton.Size = UDim2.new(0, 100, 0, 40)
-	teleportButton.Position = UDim2.new(1, -115, 0.5, -20)
-	teleportButton.AnchorPoint = Vector2.new(1, 0.5)
-	teleportButton.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
-	teleportButton.Text = "⚡ ТЕЛЕПОРТ"
-	teleportButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	teleportButton.Font = Enum.Font.GothamBold
-	teleportButton.TextSize = 14
-	teleportButton.AutoButtonColor = false
-	
-	local teleportButtonCorner = Instance.new("UICorner")
-	teleportButtonCorner.CornerRadius = UDim.new(0, 8)
-	teleportButtonCorner.Parent = teleportButton
-	
-	local teleportButtonStroke = Instance.new("UIStroke")
-	teleportButtonStroke.Color = Color3.fromRGB(120, 220, 150)
-	teleportButtonStroke.Thickness = 1
-	teleportButtonStroke.Parent = teleportButton
-	
-	local deleteButton = Instance.new("TextButton")
-	deleteButton.Name = "DeleteButton"
-	deleteButton.Size = UDim2.new(0, 40, 0, 40)
-	deleteButton.Position = UDim2.new(1, -65, 0.5, -20)
-	deleteButton.AnchorPoint = Vector2.new(1, 0.5)
-	deleteButton.BackgroundColor3 = Color3.fromRGB(220, 80, 80)
-	deleteButton.Text = "🗑"
-	deleteButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	deleteButton.Font = Enum.Font.GothamBold
-	deleteButton.TextSize = 18
-	deleteButton.AutoButtonColor = false
-	
-	local deleteButtonCorner = Instance.new("UICorner")
-	deleteButtonCorner.CornerRadius = UDim.new(0, 8)
-	deleteButtonCorner.Parent = deleteButton
-	
-	-- Добавляем элементы в карточку
-	icon.Parent = card
-	positionNameLabel.Parent = card
-	coordinatesLabel.Parent = card
-	teleportButton.Parent = card
-	deleteButton.Parent = card
-	
-	-- Функционал кнопки телепортации
-	teleportButton.MouseButton1Click:Connect(function()
-		-- Визуальная обратная связь
-		local originalText = teleportButton.Text
-		teleportButton.Text = "⚡"
-		teleportButton.BackgroundColor3 = Color3.fromRGB(100, 220, 140)
-		
-		-- Мгновенная телепортация
-		local success = instantTeleport(position)
-		
-		if success then
-			-- Звуковой эффект (опционально)
-			-- local sound = Instance.new("Sound")
-			-- sound.SoundId = "rbxassetid://ваш_звук"
-			-- sound.Parent = player.Character.HumanoidRootPart
-			-- sound:Play()
-			
-			-- Мигающий эффект кнопки
-			for i = 1, 2 do
-				TweenService:Create(teleportButton, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(150, 250, 180)}):Play()
-				task.wait(0.1)
-				TweenService:Create(teleportButton, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(100, 220, 140)}):Play()
-				task.wait(0.1)
-			end
-		end
-		
-		-- Возвращаем исходный вид
-		task.wait(0.3)
-		teleportButton.Text = originalText
-		teleportButton.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
-	end)
-	
-	deleteButton.MouseButton1Click:Connect(function()
-		-- Анимация удаления
-		local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-		local tween = TweenService:Create(card, tweenInfo, {Size = UDim2.new(0, 0, 0, 80), BackgroundTransparency = 1})
-		tween:Play()
-		tween.Completed:Wait()
-		card:Destroy()
-		
-		-- Удаляем из сохраненных позиций
-		for i, pos in ipairs(savedPositions) do
-			if pos.name == positionName then
-				table.remove(savedPositions, i)
-				break
-			end
-		end
-	end)
-	
-	-- Эффекты наведения
-	local function onHover(button, originalColor, hoverColor)
-		button.MouseEnter:Connect(function()
-			if not isAnimating then
-				TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = hoverColor}):Play()
-			end
-		end)
-		
-		button.MouseLeave:Connect(function()
-			if not isAnimating then
-				TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = originalColor}):Play()
-			end
-		end)
-	end
-	
-	onHover(teleportButton, Color3.fromRGB(80, 200, 120), Color3.fromRGB(100, 220, 140))
-	onHover(deleteButton, Color3.fromRGB(220, 80, 80), Color3.fromRGB(240, 100, 100))
-	
-	return card
+    local card = Instance.new("Frame")
+    card.Name = "PositionCard"
+    card.Size = UDim2.new(1, 0, 0, 80)
+    card.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+    card.BackgroundTransparency = 0.1
+    
+    local cardCorner = Instance.new("UICorner")
+    cardCorner.CornerRadius = UDim.new(0, 10)
+    cardCorner.Parent = card
+    
+    local cardStroke = Instance.new("UIStroke")
+    cardStroke.Color = Color3.fromRGB(80, 80, 100)
+    cardStroke.Thickness = 1
+    cardStroke.Parent = card
+    
+    -- Иконка
+    local icon = Instance.new("TextLabel")
+    icon.Name = "Icon"
+    icon.Size = UDim2.new(0, 50, 0, 50)
+    icon.Position = UDim2.new(0, 15, 0.5, -25)
+    icon.AnchorPoint = Vector2.new(0, 0.5)
+    icon.BackgroundColor3 = Color3.fromRGB(60, 150, 250)
+    icon.Text = "📍"
+    icon.TextColor3 = Color3.fromRGB(255, 255, 255)
+    icon.Font = Enum.Font.GothamBold
+    icon.TextSize = 24
+    
+    local iconCorner = Instance.new("UICorner")
+    iconCorner.CornerRadius = UDim.new(0, 10)
+    iconCorner.Parent = icon
+    
+    -- Название позиции
+    local positionNameLabel = Instance.new("TextLabel")
+    positionNameLabel.Name = "PositionName"
+    positionNameLabel.Size = UDim2.new(0.6, -70, 0, 30)
+    positionNameLabel.Position = UDim2.new(0, 75, 0, 15)
+    positionNameLabel.BackgroundTransparency = 1
+    positionNameLabel.Text = positionName
+    positionNameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    positionNameLabel.Font = Enum.Font.GothamBold
+    positionNameLabel.TextSize = 18
+    positionNameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Координаты
+    local coordinatesLabel = Instance.new("TextLabel")
+    coordinatesLabel.Name = "Coordinates"
+    coordinatesLabel.Size = UDim2.new(0.6, -70, 0, 20)
+    coordinatesLabel.Position = UDim2.new(0, 75, 0, 45)
+    coordinatesLabel.BackgroundTransparency = 1
+    coordinatesLabel.Text = string.format("X:%.1f Y:%.1f Z:%.1f", position.X, position.Y, position.Z)
+    coordinatesLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+    coordinatesLabel.Font = Enum.Font.Gotham
+    coordinatesLabel.TextSize = 14
+    coordinatesLabel.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Кнопка телепортации
+    local teleportButton = Instance.new("TextButton")
+    teleportButton.Name = "TeleportButton"
+    teleportButton.Size = UDim2.new(0, 100, 0, 40)
+    teleportButton.Position = UDim2.new(1, -115, 0.5, -20)
+    teleportButton.AnchorPoint = Vector2.new(1, 0.5)
+    teleportButton.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
+    teleportButton.Text = "⚡ ТЕЛЕПОРТ"
+    teleportButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    teleportButton.Font = Enum.Font.GothamBold
+    teleportButton.TextSize = 14
+    teleportButton.AutoButtonColor = false
+    
+    local teleportButtonCorner = Instance.new("UICorner")
+    teleportButtonCorner.CornerRadius = UDim.new(0, 8)
+    teleportButtonCorner.Parent = teleportButton
+    
+    local teleportButtonStroke = Instance.new("UIStroke")
+    teleportButtonStroke.Color = Color3.fromRGB(120, 220, 150)
+    teleportButtonStroke.Thickness = 1
+    teleportButtonStroke.Parent = teleportButton
+    
+    -- Кнопка удаления
+    local deleteButton = Instance.new("TextButton")
+    deleteButton.Name = "DeleteButton"
+    deleteButton.Size = UDim2.new(0, 40, 0, 40)
+    deleteButton.Position = UDim2.new(1, -65, 0.5, -20)
+    deleteButton.AnchorPoint = Vector2.new(1, 0.5)
+    deleteButton.BackgroundColor3 = Color3.fromRGB(220, 80, 80)
+    deleteButton.Text = "🗑"
+    deleteButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    deleteButton.Font = Enum.Font.GothamBold
+    deleteButton.TextSize = 18
+    deleteButton.AutoButtonColor = false
+    
+    local deleteButtonCorner = Instance.new("UICorner")
+    deleteButtonCorner.CornerRadius = UDim.new(0, 8)
+    deleteButtonCorner.Parent = deleteButton
+    
+    -- Собираем карточку
+    icon.Parent = card
+    positionNameLabel.Parent = card
+    coordinatesLabel.Parent = card
+    teleportButton.Parent = card
+    deleteButton.Parent = card
+    
+    -- Функционал кнопок
+    teleportButton.MouseButton1Click:Connect(function()
+        if isTeleporting then return end
+        
+        isTeleporting = true
+        local character = player.Character
+        if character and character:FindFirstChild("HumanoidRootPart") then
+            -- Визуальная обратная связь
+            local originalText = teleportButton.Text
+            teleportButton.Text = "⚡"
+            teleportButton.BackgroundColor3 = Color3.fromRGB(100, 220, 140)
+            
+            -- Мгновенная телепортация
+            character.HumanoidRootPart.CFrame = CFrame.new(position)
+            
+            -- Эффект
+            task.wait(0.3)
+            teleportButton.Text = "✓"
+            task.wait(0.5)
+            teleportButton.Text = originalText
+            teleportButton.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
+        end
+        isTeleporting = false
+    end)
+    
+    deleteButton.MouseButton1Click:Connect(function()
+        -- Анимация удаления
+        local tween = TweenService:Create(card, TweenInfo.new(0.3), {
+            Size = UDim2.new(0, 0, 0, 80),
+            BackgroundTransparency = 1
+        })
+        tween:Play()
+        tween.Completed:Wait()
+        card:Destroy()
+        
+        -- Удаляем из массива
+        for i, pos in ipairs(savedPositions) do
+            if pos.name == positionName then
+                table.remove(savedPositions, i)
+                break
+            end
+        end
+    end)
+    
+    -- Эффекты наведения
+    local function setupHover(button, originalColor, hoverColor)
+        button.MouseEnter:Connect(function()
+            TweenService:Create(button, TweenInfo.new(0.2), {
+                BackgroundColor3 = hoverColor
+            }):Play()
+        end)
+        
+        button.MouseLeave:Connect(function()
+            TweenService:Create(button, TweenInfo.new(0.2), {
+                BackgroundColor3 = originalColor
+            }):Play()
+        end)
+    end
+    
+    setupHover(teleportButton, Color3.fromRGB(80, 200, 120), Color3.fromRGB(100, 220, 140))
+    setupHover(deleteButton, Color3.fromRGB(220, 80, 80), Color3.fromRGB(240, 100, 100))
+    
+    return card
 end
 
 -- Функция сохранения позиции
 local function saveCurrentPosition()
-	local character = player.Character
-	if not character or not character:FindFirstChild("HumanoidRootPart") then
-		return
-	end
-	
-	local position = character.HumanoidRootPart.Position
-	local positionName = "Точка #" .. (#savedPositions + 1)
-	
-	-- Добавляем в массив
-	table.insert(savedPositions, {
-		name = positionName,
-		position = position
-	})
-	
-	-- Создаем карточку
-	local card = createPositionCard(positionName, position)
-	card.Parent = savedPositionsFrame
-	
-	-- Визуальная обратная связь
-	local originalText = saveButton.Text
-	saveButton.Text = "✓ СОХРАНЕНО!"
-	saveButton.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
-	
-	-- Мигающий эффект
-	for i = 1, 2 do
-		TweenService:Create(saveButton, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(120, 220, 150)}):Play()
-		task.wait(0.1)
-		TweenService:Create(saveButton, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(80, 200, 120)}):Play()
-		task.wait(0.1)
-	end
-	
-	task.wait(0.5)
-	saveButton.Text = originalText
-	saveButton.BackgroundColor3 = Color3.fromRGB(60, 150, 250)
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then
+        return
+    end
+    
+    local position = character.HumanoidRootPart.Position
+    local positionName = "Точка #" .. (#savedPositions + 1)
+    
+    -- Сохраняем
+    table.insert(savedPositions, {
+        name = positionName,
+        position = position
+    })
+    
+    -- Создаем карточку
+    local card = createPositionCard(positionName, position)
+    card.Parent = savedPositionsFrame
+    
+    -- Визуальная обратная связь
+    saveButton.Text = "✓ СОХРАНЕНО!"
+    task.wait(0.5)
+    saveButton.Text = "💾 СОХРАНИТЬ ПОЗИЦИЮ"
 end
 
 -- Функция переключения меню
 local function toggleMenu()
-	if isAnimating then return end
-	isAnimating = true
-	
-	menuOpen = not menuOpen
-	
-	local mainFrameGoal = menuOpen and UDim2.new(0, 10, 0.5, 0) or UDim2.new(0, -350, 0.5, 0)
-	local toggleButtonGoal = menuOpen and UDim2.new(0, 360, 0.5, -25) or UDim2.new(0, 10, 0.5, -25)
-	local blurSize = menuOpen and 10 or 0
-	
-	-- Анимация меню
-	local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-	local tween1 = TweenService:Create(mainFrame, tweenInfo, {Position = mainFrameGoal})
-	local tween2 = TweenService:Create(toggleButton, tweenInfo, {Position = toggleButtonGoal})
-	local tween3 = TweenService:Create(backgroundBlur, tweenInfo, {Size = blurSize})
-	
-	tween1:Play()
-	tween2:Play()
-	tween3:Play()
-	
-	tween1.Completed:Connect(function()
-		isAnimating = false
-	end)
+    if isAnimating then return end
+    isAnimating = true
+    
+    menuOpen = not menuOpen
+    
+    local mainFrameGoal = menuOpen and UDim2.new(0, 10, 0.5, 0) or UDim2.new(0, -350, 0.5, 0)
+    local toggleButtonGoal = menuOpen and UDim2.new(0, 360, 0.5, -25) or UDim2.new(0, 10, 0.5, -25)
+    
+    -- Анимация
+    local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+    local tween1 = TweenService:Create(mainFrame, tweenInfo, {Position = mainFrameGoal})
+    local tween2 = TweenService:Create(toggleButton, tweenInfo, {Position = toggleButtonGoal})
+    
+    tween1:Play()
+    tween2:Play()
+    
+    tween1.Completed:Connect(function()
+        isAnimating = false
+    end)
 end
 
--- Обработчики кнопок
+-- Подключаем кнопки
 saveButton.MouseButton1Click:Connect(saveCurrentPosition)
 toggleButton.MouseButton1Click:Connect(toggleMenu)
 
 -- Эффекты наведения для основных кнопок
-local function setupButtonHover(button, originalColor, hoverColor)
-	button.MouseEnter:Connect(function()
-		if not isAnimating then
-			TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = hoverColor}):Play()
-		end
-	end)
-	
-	button.MouseLeave:Connect(function()
-		if not isAnimating then
-			TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = originalColor}):Play()
-		end
-	end)
+local function setupMainButtonHover(button, originalColor, hoverColor)
+    button.MouseEnter:Connect(function()
+        if not isAnimating then
+            TweenService:Create(button, TweenInfo.new(0.2), {
+                BackgroundColor3 = hoverColor
+            }):Play()
+        end
+    end)
+    
+    button.MouseLeave:Connect(function()
+        if not isAnimating then
+            TweenService:Create(button, TweenInfo.new(0.2), {
+                BackgroundColor3 = originalColor
+            }):Play()
+        end
+    end)
 end
 
-setupButtonHover(saveButton, Color3.fromRGB(60, 150, 250), Color3.fromRGB(80, 170, 255))
-setupButtonHover(toggleButton, Color3.fromRGB(40, 40, 55), Color3.fromRGB(60, 60, 75))
+setupMainButtonHover(saveButton, Color3.fromRGB(60, 150, 250), Color3.fromRGB(80, 170, 255))
+setupMainButtonHover(toggleButton, Color3.fromRGB(40, 40, 55), Color3.fromRGB(60, 60, 75))
 
--- Горячая клавиша для открытия меню (Tab)
+-- Горячие клавиши
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-	
-	if input.KeyCode == Enum.KeyCode.Tab then
-		toggleMenu()
-	end
-	
-	-- Дополнительная горячая клавиша для быстрого сохранения (F5)
-	if input.KeyCode == Enum.KeyCode.F5 then
-		saveCurrentPosition()
-	end
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.Tab then
+        toggleMenu()
+    end
+    
+    if input.KeyCode == Enum.KeyCode.F5 then
+        saveCurrentPosition()
+    end
+    
+    if input.KeyCode == Enum.KeyCode.F6 and #savedPositions > 0 then
+        local lastPos = savedPositions[#savedPositions].position
+        local character = player.Character
+        if character and character:FindFirstChild("HumanoidRootPart") then
+            character.HumanoidRootPart.CFrame = CFrame.new(lastPos)
+        end
+    end
 end)
 
--- Автосохранение позиции при запуске
+-- Автосохранение стартовой позиции
 task.spawn(function()
-	task.wait(2) -- Ждем загрузки
-	local character = player.Character
-	if character and character:FindFirstChild("HumanoidRootPart") then
-		local position = character.HumanoidRootPart.Position
-		table.insert(savedPositions, {
-			name = "Стартовая точка",
-			position = position
-		})
-		
-		local card = createPositionCard("Стартовая точка", position)
-		card.Parent = savedPositionsFrame
-	end
+    task.wait(2)
+    local character = player.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        local position = character.HumanoidRootPart.Position
+        table.insert(savedPositions, {
+            name = "Стартовая точка",
+            position = position
+        })
+        
+        local card = createPositionCard("Стартовая точка", position)
+        card.Parent = savedPositionsFrame
+    end
 end)
 
--- Функция для быстрой телепортации последней точки (горячая клавиша F6)
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-	
-	if input.KeyCode == Enum.KeyCode.F6 then
-		if #savedPositions > 0 then
-			local lastPosition = savedPositions[#savedPositions].position
-			instantTeleport(lastPosition)
-			
-			-- Визуальный эффект на экране
-			local notification = Instance.new("TextLabel")
-			notification.Text = "⚡ Телепортация к последней точке!"
-			notification.Size = UDim2.new(0, 300, 0, 40)
-			notification.Position = UDim2.new(0.5, -150, 0.1, 0)
-			notification.AnchorPoint = Vector2.new(0.5, 0)
-			notification.BackgroundColor3 = Color3.fromRGB(60, 150, 250)
-			notification.TextColor3 = Color3.fromRGB(255, 255, 255)
-			notification.Font = Enum.Font.GothamBold
-			notification.TextSize = 16
-			notification.BackgroundTransparency = 0.3
-			
-			local notificationCorner = Instance.new("UICorner")
-			notificationCorner.CornerRadius = UDim.new(0, 10)
-			notificationCorner.Parent = notification
-			
-			notification.Parent = screenGui
-			
-			-- Анимация появления и исчезновения
-			TweenService:Create(notification, TweenInfo.new(0.3), {BackgroundTransparency = 0.3}):Play()
-			task.wait(2)
-			TweenService:Create(notification, TweenInfo.new(0.3), {BackgroundTransparency = 1}):Play()
-			task.wait(0.3)
-			notification:Destroy()
-		end
-	end
-end)
-
-print("⚡ Быстрая телепортация загружена!")
+print("⚡ Teleport System загружен!")
 print("Управление:")
-print("Tab - Открыть/закрыть меню")
+print("Tab - Открыть/закрыть меню телепортации")
 print("F5 - Быстро сохранить позицию")
-print("F6 - Телепорт к последней сохраненной точке")
+print("F6 - Телепорт к последней точке")
