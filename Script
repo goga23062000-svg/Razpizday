@@ -1,346 +1,343 @@
--- Free Camera Script for Roblox
--- Author: sherik
+-- Free Camera for Roblox (Compact)
+local Players, UIS, RS, TS = game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService"), game:GetService("TweenService")
+local player, camera = Players.LocalPlayer, workspace.CurrentCamera
 
--- Services
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
+-- Settings
+local cfg = {speed = 10, fast = 25, sens = 0.5, touchSens = 0.3}
+local isMobile = UIS.TouchEnabled
 
--- Local player
-local player = Players.LocalPlayer
-local camera = workspace.CurrentCamera
+-- State
+local cam = {enabled = false, pos = Vector3.new(), rot = Vector2.new(), ogType = Enum.CameraType.Custom}
 
--- Configuration
-local cameraSpeed = 10
-local fastCameraSpeed = 25
-local mouseSensitivity = 0.5
-
--- Camera state
-local freeCameraEnabled = false
-local cameraPosition = Vector3.new(0, 0, 0)
-local cameraRotation = Vector2.new(0, 0)
-local originalCameraType = Enum.CameraType.Custom
-
--- UI Elements
-local screenGui
-local toggleButton
-local teleportButton
+-- UI
+local gui, toggleBtn, tpBtn, mobileUI
+local joyVec = Vector3.new()
 
 -- Create UI
-function createUI()
-    -- Destroy existing UI
-    if screenGui then
-        screenGui:Destroy()
+local function createUI()
+    if gui then gui:Destroy() end
+    
+    gui = Instance.new("ScreenGui")
+    gui.Name = "FreeCamUI"
+    gui.Parent = player.PlayerGui
+    gui.ResetOnSpawn = false
+    
+    -- Toggle Button
+    toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(0, 140, 0, 36)
+    toggleBtn.Position = UDim2.new(0, 15, 0, 15)
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(70, 130, 180)
+    toggleBtn.Text = "FREE CAMERA"
+    toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    toggleBtn.Font = Enum.Font.GothamBold
+    toggleBtn.ZIndex = 10
+    toggleBtn.Parent = gui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = toggleBtn
+    
+    -- Teleport Button
+    tpBtn = Instance.new("TextButton")
+    tpBtn.Size = UDim2.new(0, 140, 0, 36)
+    tpBtn.Position = UDim2.new(0, 15, 0, 60)
+    tpBtn.BackgroundColor3 = Color3.fromRGB(100, 180, 100)
+    tpBtn.Text = "TELEPORT HERE"
+    tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tpBtn.Font = Enum.Font.GothamBold
+    tpBtn.Visible = false
+    tpBtn.ZIndex = 10
+    tpBtn.Parent = gui
+    
+    local corner2 = Instance.new("UICorner")
+    corner2.CornerRadius = UDim.new(0, 6)
+    corner2.Parent = tpBtn
+    
+    -- Mobile Controls
+    if isMobile then
+        mobileUI = Instance.new("Frame")
+        mobileUI.Size = UDim2.new(1, 0, 1, 0)
+        mobileUI.BackgroundTransparency = 1
+        mobileUI.Visible = false
+        mobileUI.ZIndex = 5
+        mobileUI.Parent = gui
+        
+        -- Joystick
+        local joy = Instance.new("Frame")
+        joy.Size = UDim2.new(0, 100, 0, 100)
+        joy.Position = UDim2.new(0, 30, 1, -140)
+        joy.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+        joy.BackgroundTransparency = 0.4
+        joy.ZIndex = 6
+        joy.Parent = mobileUI
+        
+        local joyCorner = Instance.new("UICorner")
+        joyCorner.CornerRadius = UDim.new(1, 0)
+        joyCorner.Parent = joy
+        
+        local joyHandle = Instance.new("Frame")
+        joyHandle.Size = UDim2.new(0, 40, 0, 40)
+        joyHandle.Position = UDim2.new(0.5, -20, 0.5, -20)
+        joyHandle.BackgroundColor3 = Color3.fromRGB(100, 150, 200)
+        joyHandle.BackgroundTransparency = 0.3
+        joyHandle.ZIndex = 7
+        joyHandle.Parent = joy
+        
+        local handleCorner = Instance.new("UICorner")
+        handleCorner.CornerRadius = UDim.new(1, 0)
+        handleCorner.Parent = joyHandle
+        
+        -- Touch Area
+        local touchZone = Instance.new("Frame")
+        touchZone.Size = UDim2.new(0.4, 0, 0.6, 0)
+        touchZone.Position = UDim2.new(0.6, 0, 0.2, 0)
+        touchZone.BackgroundTransparency = 1
+        touchZone.ZIndex = 6
+        touchZone.Parent = mobileUI
+        
+        -- Buttons
+        local function addBtn(text, pos, color)
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(0, 50, 0, 50)
+            btn.Position = pos
+            btn.BackgroundColor3 = color
+            btn.BackgroundTransparency = 0.4
+            btn.Text = text
+            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            btn.Font = Enum.Font.GothamBold
+            btn.ZIndex = 6
+            btn.AutoButtonColor = false
+            btn.Parent = mobileUI
+            
+            local btnCorner = Instance.new("UICorner")
+            btnCorner.CornerRadius = UDim.new(0, 6)
+            btnCorner.Parent = btn
+            
+            return btn
+        end
+        
+        local upBtn = addBtn("↑", UDim2.new(1, -70, 0, 20), Color3.fromRGB(80, 180, 80))
+        local downBtn = addBtn("↓", UDim2.new(1, -70, 0, 80), Color3.fromRGB(180, 80, 80))
+        local speedBtn = addBtn("⚡", UDim2.new(1, -70, 1, -140), Color3.fromRGB(180, 150, 50))
+        
+        -- Touch Events
+        local joyActive, joyCenter, joyTouch
+        joy.InputBegan:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.Touch then
+                joyActive = true
+                joyCenter = i.Position
+                joyTouch = i
+            end
+        end)
+        
+        joy.InputEnded:Connect(function(i)
+            if i == joyTouch then
+                joyActive = false
+                TS:Create(joyHandle, TweenInfo.new(0.2), {Position = UDim2.new(0.5, -20, 0.5, -20)}):Play()
+                joyVec = Vector3.new()
+            end
+        end)
+        
+        UIS.InputChanged:Connect(function(i)
+            if joyActive and i.UserInputType == Enum.UserInputType.Touch and i == joyTouch then
+                local delta = i.Position - joyCenter
+                local dist = math.min(delta.Magnitude, 40)
+                if dist > 5 then
+                    local dir = delta.Unit
+                    joyVec = Vector3.new(dir.X, 0, dir.Y)
+                    joyHandle.Position = UDim2.new(0.5 + dir.X*0.4, -20, 0.5 + dir.Y*0.4, -20)
+                end
+            end
+        end)
+        
+        -- Store mobile state
+        mobileUI.joyVec = function() return joyVec end
+        mobileUI.upBtn = upBtn
+        mobileUI.downBtn = downBtn
+        mobileUI.speedBtn = speedBtn
+        mobileUI.touchZone = touchZone
     end
     
-    -- Create ScreenGui
-    screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "FreeCameraUI"
-    screenGui.Parent = player.PlayerGui
-    screenGui.ResetOnSpawn = false
-    
-    -- Create toggle button
-    toggleButton = Instance.new("TextButton")
-    toggleButton.Name = "ToggleButton"
-    toggleButton.Size = UDim2.new(0, 150, 0, 40)
-    toggleButton.Position = UDim2.new(0, 20, 0, 20)
-    toggleButton.BackgroundColor3 = Color3.fromRGB(70, 130, 180)
-    toggleButton.BorderSizePixel = 0
-    toggleButton.Text = "FREE CAMERA"
-    toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    toggleButton.TextSize = 16
-    toggleButton.Font = Enum.Font.GothamBold
-    toggleButton.Parent = screenGui
-    
-    -- Add rounded corners
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = toggleButton
-    
-    -- Add shadow
-    local shadow = Instance.new("UIStroke")
-    shadow.Color = Color3.fromRGB(40, 40, 60)
-    shadow.Thickness = 2
-    shadow.Parent = toggleButton
-    
-    -- Create teleport button
-    teleportButton = Instance.new("TextButton")
-    teleportButton.Name = "TeleportButton"
-    teleportButton.Size = UDim2.new(0, 150, 0, 40)
-    teleportButton.Position = UDim2.new(0, 20, 0, 70)
-    teleportButton.BackgroundColor3 = Color3.fromRGB(100, 180, 100)
-    teleportButton.BorderSizePixel = 0
-    teleportButton.Text = "TELEPORT TO CAMERA"
-    teleportButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    teleportButton.TextSize = 14
-    teleportButton.Font = Enum.Font.GothamBold
-    teleportButton.Visible = false
-    teleportButton.Parent = screenGui
-    
-    -- Add rounded corners to teleport button
-    local corner2 = Instance.new("UICorner")
-    corner2.CornerRadius = UDim.new(0, 8)
-    corner2.Parent = teleportButton
-    
-    -- Add shadow to teleport button
-    local shadow2 = Instance.new("UIStroke")
-    shadow2.Color = Color3.fromRGB(40, 60, 40)
-    shadow2.Thickness = 2
-    shadow2.Parent = teleportButton
-    
-    -- Button hover effects
-    toggleButton.MouseEnter:Connect(function()
-        if not freeCameraEnabled then
-            game:GetService("TweenService"):Create(toggleButton, TweenInfo.new(0.2), {
-                BackgroundColor3 = Color3.fromRGB(100, 160, 210)
-            }):Play()
-        end
-    end)
-    
-    toggleButton.MouseLeave:Connect(function()
-        if not freeCameraEnabled then
-            game:GetService("TweenService"):Create(toggleButton, TweenInfo.new(0.2), {
-                BackgroundColor3 = Color3.fromRGB(70, 130, 180)
-            }):Play()
-        end
-    end)
-    
-    teleportButton.MouseEnter:Connect(function()
-        game:GetService("TweenService"):Create(teleportButton, TweenInfo.new(0.2), {
-            BackgroundColor3 = Color3.fromRGB(120, 200, 120)
-        }):Play()
-    end)
-    
-    teleportButton.MouseLeave:Connect(function()
-        game:GetService("TweenService"):Create(teleportButton, TweenInfo.new(0.2), {
-            BackgroundColor3 = Color3.fromRGB(100, 180, 100)
-        }):Play()
-    end)
-    
-    -- Button click events
-    toggleButton.MouseButton1Click:Connect(function()
-        toggleFreeCamera()
-    end)
-    
-    teleportButton.MouseButton1Click:Connect(function()
-        teleportToCamera()
-    end)
+    -- Events
+    toggleBtn.MouseButton1Click:Connect(function() toggleCam() end)
+    tpBtn.MouseButton1Click:Connect(function() teleport() end)
 end
 
--- Toggle free camera
-function toggleFreeCamera()
-    freeCameraEnabled = not freeCameraEnabled
+-- Toggle Camera
+local function toggleCam()
+    cam.enabled = not cam.enabled
     
-    if freeCameraEnabled then
-        -- Save original camera type
-        originalCameraType = camera.CameraType
-        
-        -- Get current camera position
-        cameraPosition = camera.CFrame.Position
-        cameraRotation = Vector2.new(
+    if cam.enabled then
+        cam.ogType = camera.CameraType
+        cam.pos = camera.CFrame.Position
+        cam.rot = Vector2.new(
             math.atan2(camera.CFrame.LookVector.Z, camera.CFrame.LookVector.X),
             math.asin(camera.CFrame.LookVector.Y)
         )
         
-        -- Change camera type
         camera.CameraType = Enum.CameraType.Scriptable
+        tpBtn.Visible = true
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 100)
+        toggleBtn.Text = "FREE CAM [ON]"
         
-        -- Show teleport button
-        teleportButton.Visible = true
+        if isMobile and mobileUI then
+            mobileUI.Visible = true
+        else
+            UIS.MouseBehavior = Enum.MouseBehavior.LockCenter
+            UIS.MouseIconEnabled = false
+        end
         
-        -- Update toggle button
-        toggleButton.BackgroundColor3 = Color3.fromRGB(50, 180, 100)
-        toggleButton.Text = "FREE CAMERA [ON]"
-        
-        -- Show notification
-        showNotification("Free Camera Enabled!", Color3.fromRGB(100, 255, 100))
-        
-        -- Enable mouse lock for better control
-        UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
-        
+        notify("Free Camera ON", Color3.fromRGB(100, 255, 100))
     else
-        -- Restore original camera
-        camera.CameraType = originalCameraType
+        camera.CameraType = cam.ogType
+        tpBtn.Visible = false
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(70, 130, 180)
+        toggleBtn.Text = "FREE CAMERA"
         
-        -- Hide teleport button
-        teleportButton.Visible = false
+        if isMobile and mobileUI then
+            mobileUI.Visible = false
+        else
+            UIS.MouseBehavior = Enum.MouseBehavior.Default
+            UIS.MouseIconEnabled = true
+        end
         
-        -- Update toggle button
-        toggleButton.BackgroundColor3 = Color3.fromRGB(70, 130, 180)
-        toggleButton.Text = "FREE CAMERA"
-        
-        -- Release mouse
-        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-        
-        -- Show notification
-        showNotification("Free Camera Disabled!", Color3.fromRGB(255, 100, 100))
+        notify("Free Camera OFF", Color3.fromRGB(255, 100, 100))
     end
 end
 
--- Teleport player to camera position
-function teleportToCamera()
-    if not freeCameraEnabled then
-        showNotification("Enable Free Camera first!", Color3.fromRGB(255, 200, 50))
+-- Teleport
+local function teleport()
+    if not cam.enabled then
+        notify("Turn on Free Cam first!", Color3.fromRGB(255, 200, 50))
         return
     end
     
-    local character = player.Character
-    if character then
-        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-        if humanoidRootPart then
-            -- Teleport the player
-            humanoidRootPart.CFrame = CFrame.new(cameraPosition)
-            
-            -- Show notification
-            showNotification("Teleported to camera position!", Color3.fromRGB(100, 200, 255))
+    local char = player.Character
+    if char then
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            hrp.CFrame = CFrame.new(cam.pos)
+            notify("Teleported!", Color3.fromRGB(100, 200, 255))
         end
     end
 end
 
--- Show notification
-function showNotification(message, color)
-    local notification = Instance.new("TextLabel")
-    notification.Name = "Notification"
-    notification.Size = UDim2.new(0, 300, 0, 40)
-    notification.Position = UDim2.new(0.5, -150, 0, 20)
-    notification.AnchorPoint = Vector2.new(0.5, 0)
-    notification.BackgroundColor3 = color
-    notification.BackgroundTransparency = 0.2
-    notification.Text = message
-    notification.TextColor3 = Color3.fromRGB(255, 255, 255)
-    notification.TextSize = 16
-    notification.Font = Enum.Font.GothamBold
-    notification.Parent = screenGui
+-- Notify
+local function notify(msg, color)
+    local note = Instance.new("TextLabel")
+    note.Size = UDim2.new(0, 280, 0, 40)
+    note.Position = UDim2.new(0.5, -140, 0, 20)
+    note.AnchorPoint = Vector2.new(0.5, 0)
+    note.BackgroundColor3 = color
+    note.BackgroundTransparency = 0.3
+    note.Text = msg
+    note.TextColor3 = Color3.fromRGB(255, 255, 255)
+    note.Font = Enum.Font.GothamBold
+    note.ZIndex = 20
+    note.Parent = gui
     
-    -- Add rounded corners
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = notification
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = note
     
-    -- Fade out animation
-    game:GetService("TweenService"):Create(notification, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
+    TS:Create(note, TweenInfo.new(0.5), {
         BackgroundTransparency = 1,
         TextTransparency = 1
     }):Play()
     
-    -- Destroy after animation
-    game:GetService("Debris"):AddItem(notification, 2)
+    game:GetService("Debris"):AddItem(note, 2)
 end
 
--- Camera movement system
-local function updateCamera(deltaTime)
-    if not freeCameraEnabled then return end
+-- Camera Update
+RS.RenderStepped:Connect(function(dt)
+    if not cam.enabled then return end
     
-    -- Get input
-    local inputVector = Vector3.new(0, 0, 0)
+    local input = Vector3.new()
+    local speed = cfg.speed
+    local rotDelta = Vector2.new()
     
-    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-        inputVector = inputVector + Vector3.new(0, 0, -1)
+    -- PC Controls
+    if not isMobile then
+        if UIS:IsKeyDown(Enum.KeyCode.W) then input += Vector3.new(0,0,-1) end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then input += Vector3.new(0,0,1) end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then input += Vector3.new(-1,0,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then input += Vector3.new(1,0,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.E) then input += Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.Q) then input += Vector3.new(0,-1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then speed = cfg.fast end
+        
+        local mouseDelta = UIS:GetMouseDelta()
+        rotDelta = Vector2.new(mouseDelta.X, mouseDelta.Y)
+        
+    -- Mobile Controls
+    else
+        if mobileUI then
+            input += mobileUI.joyVec()
+            if mobileUI.upBtn then
+                if UIS:IsMouseButtonPressed(Enum.UserInputType.Touch) and UIS:GetMouseLocation().X > ScrW()*0.7 then
+                    input += Vector3.new(0,1,0)
+                end
+            end
+            if mobileUI.speedBtn then
+                if UIS:IsMouseButtonPressed(Enum.UserInputType.Touch) then
+                    local mousePos = UIS:GetMouseLocation()
+                    local speedPos = mobileUI.speedBtn.AbsolutePosition
+                    local speedSize = mobileUI.speedBtn.AbsoluteSize
+                    if mousePos.X >= speedPos.X and mousePos.X <= speedPos.X + speedSize.X and
+                       mousePos.Y >= speedPos.Y and mousePos.Y <= speedPos.Y + speedSize.Y then
+                        speed = cfg.fast
+                    end
+                end
+            end
+            
+            -- Simple touch rotation (basic implementation)
+            if UIS:IsMouseButtonPressed(Enum.UserInputType.Touch) then
+                local mousePos = UIS:GetMouseLocation()
+                if mousePos.X > ScrW()/2 then
+                    rotDelta = Vector2.new(1, 0) * 30 * dt
+                end
+            end
+        end
     end
-    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-        inputVector = inputVector + Vector3.new(0, 0, 1)
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-        inputVector = inputVector + Vector3.new(-1, 0, 0)
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-        inputVector = inputVector + Vector3.new(1, 0, 0)
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.E) then
-        inputVector = inputVector + Vector3.new(0, 1, 0)
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.Q) then
-        inputVector = inputVector + Vector3.new(0, -1, 0)
-    end
     
-    -- Normalize input
-    if inputVector.Magnitude > 0 then
-        inputVector = inputVector.Unit
-    end
-    
-    -- Apply speed
-    local speed = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) and fastCameraSpeed or cameraSpeed
-    local movement = inputVector * speed * deltaTime
-    
-    -- Get current camera orientation
-    local camCFrame = CFrame.fromEulerAnglesYXZ(cameraRotation.Y, cameraRotation.X, 0)
-    
-    -- Transform movement to camera space
-    movement = camCFrame:VectorToWorldSpace(movement)
-    
-    -- Update camera position
-    cameraPosition = cameraPosition + movement
-    
-    -- Get mouse delta for rotation
-    local mouseDelta = UserInputService:GetMouseDelta()
-    
-    -- Update camera rotation
-    cameraRotation = Vector2.new(
-        cameraRotation.X - mouseDelta.X * mouseSensitivity * 0.01,
-        math.clamp(cameraRotation.Y - mouseDelta.Y * mouseSensitivity * 0.01, -math.pi/2 + 0.1, math.pi/2 - 0.1)
+    -- Apply rotation
+    cam.rot = Vector2.new(
+        cam.rot.X - rotDelta.X * (isMobile and cfg.touchSens or cfg.sens) * 0.01,
+        math.clamp(cam.rot.Y - rotDelta.Y * (isMobile and cfg.touchSens or cfg.sens) * 0.01, -1.4, 1.4)
     )
     
-    -- Create new camera CFrame
-    local newCFrame = CFrame.new(cameraPosition) * 
-        CFrame.fromEulerAnglesYXZ(cameraRotation.Y, cameraRotation.X, 0)
-    
-    -- Apply to camera
-    camera.CFrame = newCFrame
-end
-
--- Input handling for toggling with key
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    
-    -- Toggle with F5 key
-    if input.KeyCode == Enum.KeyCode.F5 then
-        toggleFreeCamera()
+    -- Apply movement
+    if input.Magnitude > 0 then
+        input = input.Unit
     end
     
-    -- Teleport with F6 key
-    if input.KeyCode == Enum.KeyCode.F6 and freeCameraEnabled then
-        teleportToCamera()
-    end
-end)
-
--- Connect to RunService for camera updates
-RunService.RenderStepped:Connect(function(deltaTime)
-    updateCamera(deltaTime)
-end)
-
--- Instructions function
-function showInstructions()
-    local instructions = [[
-Free Camera Controls:
-• Click FREE CAMERA button or press F5 to toggle
-• WASD - Move camera
-• Q/E - Move up/down
-• Shift - Speed boost
-• Mouse - Look around
-• Click TELEPORT button or press F6 to teleport
-• Press F5 again to exit
-    ]]
+    local move = CFrame.fromEulerAnglesYXZ(cam.rot.Y, cam.rot.X, 0):VectorToWorldSpace(input * speed * dt)
+    cam.pos += move
     
-    print(instructions)
-    showNotification("Free Camera Loaded! Press F5 or click button", Color3.fromRGB(100, 200, 255))
-end
+    -- Update camera
+    camera.CFrame = CFrame.new(cam.pos) * CFrame.fromEulerAnglesYXZ(cam.rot.Y, cam.rot.X, 0)
+end)
 
--- Initialize when player joins
+-- Hotkeys
+UIS.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.KeyCode == Enum.KeyCode.F5 then toggleCam() end
+    if input.KeyCode == Enum.KeyCode.F6 and cam.enabled then teleport() end
+end)
+
+-- Init
 if player then
     createUI()
-    showInstructions()
+    notify("Free Camera Loaded! Press F5", Color3.fromRGB(100, 200, 255))
 else
-    -- Wait for player if script runs before player loads
     Players.PlayerAdded:Wait()
     player = Players.LocalPlayer
     createUI()
-    showInstructions()
 end
 
--- Recreate UI if player respawns
 player.CharacterAdded:Connect(function()
+    wait(0.3)
     createUI()
 end)
 
-print("Free Camera Script by sherik loaded successfully!")
+print("FreeCam by sherik loaded")
